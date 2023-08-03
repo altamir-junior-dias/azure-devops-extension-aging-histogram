@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>          
+    <script src="vss-init-index.js"></script>
+    <script type="text/javascript">
+        initializeWidget('Aging', 'widgets-aging-widget');
+    </script>
+    <style>
+        div.chart { float: left; width: 100%; height: calc(100% - 36px); }
+        div.title { display: inline-block; width: 59%; }
+        div.title-area { width: 100%; display: inline-flex; }
+    </style>
+</head>
+
+<body>
+    <div class="widget">
+        <div class="title-area">
+            <div class="title">
+                <div class="inner-title" id="title">Aging</div>
+                <div class="subtitle" id="sub-title">Type</div>
+            </div>
+        </div>
+        <div class="content chart">
+            <canvas id="chart"></canvas>
+            <span id="message"></span>
+        </div>
+    </div>
+</body>
+</html>

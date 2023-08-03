@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="vss-init-index.js"></script>
+    <script type="text/javascript">
+        initializeWidgetConfiguration('AgingConfiguration', 'widgets-aging-configuration');
+    </script>
+</head>
+<body>
+    <div class="widget-configuration">
+        <div class="single-line-text-input">
+            <label>Title</label>
+            <input id="title" type="text"></input>
+        </div>
+
+        <div class="dropdown">
+            <label>Type</label>
+            <div class="wrapper">
+                <select id="type">
+                    <option value="0">Overall</option>
+                    <option value="1">State</option>
+                    <option value="2">Board Column</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="dropdown">
+            <label>Query</label>
+            <div class="wrapper">
+                <select id="query">
+                </select>
+            </div>
+        </div>
+
+        <div class="single-line-text-input">
+            <label>Percentiles (separated by comma)</label>
+            <input id="percentiles" type="text"></input>
+        </div>
+    </div>
+</body>
+</html>
