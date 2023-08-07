@@ -8,6 +8,6 @@ The porpuse of this widget is to show an Aging Histogram based on a selected Sha
 
 To configure this widget you must select the type and a Shared Query.
 
-The **Board Column** Age type must have a Shared Query that contains Backlog items, otherwise a message will be shown.
+The **Board Column Age** type must have a Shared Query that contains Backlog items, otherwise a message will be shown.
 
 ![Configuration](https://github.com/altamir-junior-dias/azure-devops-extension-aging-histogram/raw/main/images/configuration.jpg)

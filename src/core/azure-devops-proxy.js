@@ -77,6 +77,88 @@
             return deferred.promise();
         },
 
+        getItemsFromQuery: (query, withRevisions) => {
+            withRevisions = withRevisions ?? false;
+
+            var deferred = $.Deferred();
+    
+            var projectId = VSS.getWebContext().project.id;
+            witClient.queryByWiql({ query: getCleanedQuery(query.wiql) }, projectId).then((result) => {
+                var ids = [];
+
+                if (query.type == "1") {
+                    ids = result.workItems.map(r => r.id);
+
+                } else {
+                    var sources = result.workItemRelations.filter(r => r.source != null).map(r => r.source.id)
+                    var targets = result.workItemRelations.map(r => r.target.id);
+        
+                    var uniqueSources = sources.filter(function (value, index, self) { return self.indexOf(value) === index; });
+                    var uniqueTargets = targets.filter(function (value, index, self) { return self.indexOf(value) === index; });
+        
+                    ids = uniqueSources.concat(uniqueTargets);                
+                }
+    
+                if (ids.length > 0) {
+                    var deferreds = [];
+
+                    deferreds.push(getWorkItemsById(ids, getQueryFields(query.wiql)));
+
+                    if (withRevisions) {
+                        deferreds.push(getRevisionsFromItems(ids));
+                    }
+                    
+                    Promise.all(deferreds).then(results => {
+                        var workItems = results[0];
+                        var revisions = results[1];
+
+                        if (query.type == "1") {
+                            if (withRevisions) {
+                                workItems = workItems.map(workItem => {
+                                    workItem.revisions = revisions.filter(revision => revision.id == workItem.id);
+
+                                    return workItem;
+                                });
+                            }
+
+                            deferred.resolve(workItems);
+
+                        } else {
+                            var items = result.workItemRelations
+                                .filter(r => r.source == null)
+                                .map(r => {
+                                    var parent = workItems.find(wi => wi.id == r.target.id);
+        
+                                    if (withRevisions) {
+                                        parent.revisions = revisions.filter(revision => revision.id == parent.id);
+                                    }
+
+                                    parent.children = result.workItemRelations
+                                        .filter(s => s.source != null && s.source.id == r.target.id)
+                                        .map(s => {
+                                            var child = workItems.find(wi => wi.id == s.target.id);
+
+                                            if (withRevisions) {
+                                                child.revisions = revisions.filter(revision => revision.id == child.id);
+                                            }
+
+                                            return child;
+                                        });
+        
+                                    return parent;
+                                }); 
+
+                            deferred.resolve(items);
+                        }
+                    });
+                } else {
+                    deferred.resolve([]);
+                }
+            });
+    
+            return deferred.promise();
+        },
+
         getItemRevisions: (id) => {
             var deferred = $.Deferred();
 
@@ -253,7 +335,10 @@
             var webContext = VSS.getWebContext();
 
             witRestClient.getQuery(webContext.project.id, queryId, 'all', 1).then(function (query) {
-                deferred.resolve(query.wiql);
+                deferred.resolve({
+                    wiql: query.wiql,
+                    type: query.queryType
+                });
             });
 
             return deferred.promise();
@@ -425,7 +510,14 @@
         }
 
         Promise.all(deferreds).then(result => {
-            deferred.resolve([].concat.apply([], result));
+            var items = [].concat.apply([], result).map(item => {
+                var itemWithFields = item.fields;
+                itemWithFields.id = item.id;
+
+                return itemWithFields;
+            });
+
+            deferred.resolve(items);
         });
 
         return deferred.promise();

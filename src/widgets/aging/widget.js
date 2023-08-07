@@ -9,7 +9,9 @@
             $('#sub-title').text(settings.type == '0' ? 'Overall' : settings.type == '1' ? 'State' : 'Board Column');
 
             getData(settings).then(data => {
-                prepareChart(data);
+                if (data.length > 0) {
+                    prepareChart(data, settings.percentiles);
+                }
             });
 
             return window.WidgetHelpers.WidgetStatusHelper.Success();
@@ -18,49 +20,61 @@
 
     /* PRIVATE */
 
-    var getBoardColumnAges = (wiql) => {
+    var getBoardColumnAges = (query) => {
         var deferred = $.Deferred();
 
-        var query = `select [System.Id], [System.BoardColumn], [System.ChangedDate] ${wiql.substring(wiql.toUpperCase().indexOf('FROM'))}`;
+        query.wiql = `select [System.Id], [System.BoardColumn], [System.ChangedDate] ${query.wiql.substring(query.wiql.toUpperCase().indexOf('FROM'))}`;
 
-        window.AzureDevOpsProxy.getItems(query).then(items => {
-            if (items.length > 0 && items[0].fields['System.BoardColumn'] === undefined) {
+        window.AzureDevOpsProxy.getItemsFromQuery(query, true).then(items => {
+            var ages = [];
+
+            if (items.filter(item => item['System.BoardColumn'] !== undefined).length == 0) {
                 $('#chart').hide();
                 $('#message').show();
-       
+    
                 $('#message').text('Couldn\'t find BoardColumn field on the query');
-            }
 
-            var deferreds = [];
+            } else {
+                items.forEach(item => {
+                    item.revisions.sort((a, b) => a.rev > b.rev ? -1 : a.rev < b.rev ? 1 : 0);
 
-            items.forEach(item => deferreds.push(window.AzureDevOpsProxy.getItemRevisions(item.id)));
+                    var hasRevisions = item.revisions.filter(revision => revision.fields['System.BoardColumn'] !== undefined).length > 0;
 
-            Promise.all(deferreds).then(itemsRevisions => {
-                var allRevisions = [];
+                    if (hasRevisions) {
+                        var index = 0;
+                        while (item.revisions[index].fields['System.BoardColumn'] == item['System.BoardColumn']) {
+                            index++;
+                        }
 
-                itemsRevisions.forEach(item => {
-                    item.forEach(revision => allRevisions.push(revision));
-                });
-
-                var ages = items.map(item => {
-                    var revisions = allRevisions
-                        .filter(revision => revision.id == item.id);
-
-                    revisions.sort((a, b) => a.rev > b.rev ? -1 : a.rev < b.rev ? 1 : 0);
-
-                    var index = 0;
-                    while (revisions[index].fields['System.BoardColumn'] == item.fields['System.BoardColumn']) {
-                        index++;
+                        var endDate = new Date();
+                        var startDate = new Date(item.revisions[index - 1].fields['System.ChangedDate']);
+        
+                        ages.push(Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 3600 * 24)));
                     }
 
-                    var endDate = new Date();
-                    var startDate = new Date(revisions[index - 1].fields['System.ChangedDate']);
-    
-                    return Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 3600 * 24));
+                    if (item.children !== undefined) {
+                        item.children.forEach(child => {
+                            child.revisions.sort((a, b) => a.rev > b.rev ? -1 : a.rev < b.rev ? 1 : 0);
+            
+                            var hasRevisions = child.revisions.filter(revision => revision.fields['System.BoardColumn'] !== undefined).length > 0;
+            
+                            if (hasRevisions) {
+                                var index = 0;
+                                while (child.revisions[index].fields['System.BoardColumn'] == child['System.BoardColumn']) {
+                                    index++;
+                                }
+            
+                                var endDate = new Date();
+                                var startDate = new Date(child.revisions[index - 1].fields['System.ChangedDate']);
+                
+                                ages.push(Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 3600 * 24)));        
+                            }
+                        });
+                    }
                 });
+            }
 
-                deferred.resolve(ages);
-            });
+            deferred.resolve(ages);
         });
 
         return deferred.promise();
@@ -77,7 +91,7 @@
                         backgroundColor: "#79AEC8",
                         borderColor: "#417690",
                         data: data.map(d => d.items),
-                        percentiles: percentiles.split(',').map(percentile => parseInt(percentile, 10))
+                        percentiles: percentiles != '' ? percentiles.split(',').map(percentile => parseInt(percentile, 10)) : []
                     }
                 ]
             },
@@ -100,17 +114,17 @@
     var getData = (settings) => {
         var deferred = $.Deferred();
 
-        window.AzureDevOpsProxy.getQueryWiql(settings.query, false).then(wiql => {
+        window.AzureDevOpsProxy.getQueryWiql(settings.query, false).then(query => {
             var ages;
             
             if (settings.type == '0') {
-                ages = getOverallAges(wiql);
+                ages = getOverallAges(query);
                 
             } else if (settings.type == '1') {
-                ages = getStateAges(wiql);
+                ages = getStateAges(query);
                 
             } else {
-                ages = getBoardColumnAges(wiql);
+                ages = getBoardColumnAges(query);
             }
 
             ages.then(data => {
@@ -123,26 +137,35 @@
                     items.push({ age: index, items: groups[index] ?? 0 });
                 }
 
-                prepareChart(items, settings.percentiles);
-    
-                deferred.resolve();
+                deferred.resolve(items);
             });
         });
 
         return deferred.promise();
     };
 
-    var getOverallAges = (wiql) => {
+    var getOverallAges = (query) => {
         var deferred = $.Deferred();
 
-        var query = `select [System.Id], [System.CreatedDate], [Microsoft.VSTS.Common.ClosedDate] ${wiql.substring(wiql.toUpperCase().indexOf('FROM'))}`;
+        query.wiql = `select [System.Id], [System.CreatedDate], [Microsoft.VSTS.Common.ClosedDate] ${query.wiql.substring(query.wiql.toUpperCase().indexOf('FROM'))}`;
 
-        window.AzureDevOpsProxy.getItems(query).then(items => {
-            var ages = items.map(item => {
-                var endDate = item.fields['Microsoft.VSTS.Common.ClosedDate'] !== undefined ? new Date(item.fields['Microsoft.VSTS.Common.ClosedDate']) : new Date();
-                var startDate = new Date(item.fields['System.CreatedDate']);
+        window.AzureDevOpsProxy.getItemsFromQuery(query).then(items => {
+            var ages = [];
 
-                return Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 3600 * 24));
+            items.forEach(item => {
+                var endDate = item['Microsoft.VSTS.Common.ClosedDate'] !== undefined && item['Microsoft.VSTS.Common.ClosedDate'] !== null && item['Microsoft.VSTS.Common.ClosedDate'] !== '' ? new Date(item['Microsoft.VSTS.Common.ClosedDate']) : new Date();
+                var startDate = new Date(item['System.CreatedDate']);
+
+                ages.push(Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 3600 * 24)));
+
+                if (item.children !== undefined) {
+                    item.children.forEach(child => {
+                        var endDate = child['Microsoft.VSTS.Common.ClosedDate'] !== undefined && child['Microsoft.VSTS.Common.ClosedDate'] !== null && child['Microsoft.VSTS.Common.ClosedDate'] !== '' ? new Date(child['Microsoft.VSTS.Common.ClosedDate']) : new Date();
+                        var startDate = new Date(child['System.CreatedDate']);
+        
+                        ages.push(Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 3600 * 24)));
+                    });
+                }
             });
 
             deferred.resolve(ages);
@@ -162,17 +185,28 @@
         };
     };
 
-    var getStateAges = (wiql) => {
+    var getStateAges = (query) => {
         var deferred = $.Deferred();
 
-        var query = `select [System.Id], [Microsoft.VSTS.Common.StateChangeDate] ${wiql.substring(wiql.toUpperCase().indexOf('FROM'))}`;
+        query.wiql = `select [System.Id], [Microsoft.VSTS.Common.StateChangeDate] ${query.wiql.substring(query.wiql.toUpperCase().indexOf('FROM'))}`;
 
-        window.AzureDevOpsProxy.getItems(query).then(items => {
-            var ages = items.map(item => {
+        window.AzureDevOpsProxy.getItemsFromQuery(query).then(items => {
+            var ages = [];
+
+            items.forEach(item => {
                 var endDate = new Date();
-                var startDate = new Date(item.fields['Microsoft.VSTS.Common.StateChangeDate']);
+                var startDate = new Date(item['Microsoft.VSTS.Common.StateChangeDate']);
 
-                return Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 3600 * 24));
+                ages.push(Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 3600 * 24)));
+
+                if (item.children !== undefined) {
+                    item.children.forEach(child => {
+                        var endDate = new Date();
+                        var startDate = new Date(child['Microsoft.VSTS.Common.StateChangeDate']);
+        
+                        ages.push(Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 3600 * 24)));
+                    });
+                }
             });
 
             deferred.resolve(ages);
@@ -184,6 +218,13 @@
     var prepareChart = (data, percentiles) => {
         $('#chart').show();
         $('#message').hide();
+
+        if (data.length == 0) {
+            $('#chart').hide();
+            $('#message').show();
+
+            $('#message').text('There aren\'t data to show');
+        }
 
         var chartArea = document.getElementById('chart');
         var chart = new Chart(chartArea, getChartConfiguration(data, percentiles));
