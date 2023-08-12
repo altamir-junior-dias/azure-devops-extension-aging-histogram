@@ -281,7 +281,7 @@
                 deferred.resolve(result);
             };
     
-            witRestClient.getQuery(webContext.project.id, queryPath, 'all', 1).then(function (query) {
+            witRestClient.getQuery(webContext.project.id, queryPath, 'none', 1).then(function (query) {
                 var children = query.children ?? [];
                 var childrenQueries = children.filter(query => !(query.hasChildren ?? false));
                 var childrenFolders = children.filter(query => query.hasChildren ?? false);
@@ -305,7 +305,7 @@
                 if (childrenFolders.length > 0) {
                     var deferreds = [];
 
-                    childrenFolders.forEach(child => deferreds.push(window.AzureDevOpsProxy.getQuery(child.path)));
+                    childrenFolders.forEach(child => deferreds.push(window.AzureDevOpsProxy.getQuery(child.id)));
 
                     Promise.all(deferreds).then(queries => {
                         queries.forEach(childQuery => {
