@@ -2,7 +2,7 @@
     "manifestVersion": 1,
     "id": "AgeHistogramExtension",
     "publisher": "AltamirJuniorDias",
-    "version": "1.0.3",
+    "version": "1.0.4",
     "name": "Age Histogram",
     "description": "Age Histogram",
     "public": true,

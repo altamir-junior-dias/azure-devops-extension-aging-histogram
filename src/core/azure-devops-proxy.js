@@ -412,7 +412,8 @@
             extensionDataService = ExtensionDataService;
 
             var webContext = VSS.getWebContext();
-            witClient?.getWorkItemFields(webContext.project.id).then(fields => {
+            var deferred = witClient?.getFields !== undefined ? witClient?.getFields(webContext.project.id) : witClient?.getWorkItemFields(webContext.project.id);
+            deferred.then(fields => {
                 projectFields = fields.map(field => {
                     return {
                         referenceName: field.referenceName,
